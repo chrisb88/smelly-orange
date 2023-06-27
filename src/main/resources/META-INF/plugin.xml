@@ -30,4 +30,12 @@
                                  displayName="Smelly Orange Plugin"/>
         <applicationService serviceImplementation="com.brewlab.smellyorange.settings.AppSettingsState"/>
     </extensions>
+
+    <actions>
+        <action id="com.brewlab.smellyorange.actions.AddDependencyAction" class="com.brewlab.smellyorange.actions.AddDependencyAction"
+                text="AddDependency" description="Adds a dependency to a factory and dependency provider">
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="first"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="first"/>
+        </action>
+    </actions>
 </idea-plugin>
