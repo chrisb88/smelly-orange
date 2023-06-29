@@ -16,7 +16,15 @@ public class SprykerDependencyCreator {
 
     public void addToFactory() {
         addUseStatementToFactory();
-//        addGetterMethod();
+        addGetterMethodToFactory();
+    }
+
+    public void addToDependencyProvider() {
+        // todo
+    }
+
+    private void addGetterMethodToFactory() {
+        this.factoryFile.addGetMethod(this.dependencyClass);
     }
 
     private void addUseStatementToFactory() {

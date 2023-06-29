@@ -23,7 +23,6 @@ import java.util.List;
 
 public class AddDependencyAction extends AnAction {
     List<String> ApplicationLayers = Arrays.asList("Client", "Glue", "Service", "Yves", "Zed");
-    final private String SprykerNamespace = "\\Spryker";
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -49,7 +48,7 @@ public class AddDependencyAction extends AnAction {
             PsiDocumentManager.getInstance(project).commitAllDocuments();
             SprykerDependencyCreator creator = new SprykerDependencyCreator(project, spyFactoryClass, spyClass);
             creator.addToFactory();
-//        creator.addToDependencyProvider();
+            creator.addToDependencyProvider();
         });
 
         System.out.println("Action performed.");
@@ -76,11 +75,13 @@ public class AddDependencyAction extends AnAction {
         return name.endsWith("ClientInterface")
                 || name.endsWith("ServiceInterface")
                 || name.endsWith("PluginInterface")
-                || name.endsWith("FacadeInterface");
+                || name.endsWith("FacadeInterface")
+                || name.endsWith("QueryContainerInterface");
     }
 
     private boolean hasValidNamespace(@NotNull PhpClass element) {
-        return element.getNamespaceName().startsWith(SprykerNamespace)
+        return element.getNamespaceName().startsWith("\\Spryker")
+                || element.getNamespaceName().startsWith("\\SprykerShop")
                 || element.getNamespaceName().startsWith("\\" + AppSettingsState.getInstance().pyzNamespace);
     }
 
