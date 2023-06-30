@@ -5,11 +5,9 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.PhpPsiElementFactory;
-import com.jetbrains.php.lang.psi.elements.Method;
-import com.jetbrains.php.lang.psi.elements.PhpClass;
-import com.jetbrains.php.lang.psi.elements.PhpNamespace;
-import com.jetbrains.php.lang.psi.elements.PhpUseList;
+import com.jetbrains.php.lang.psi.elements.*;
 import com.jetbrains.php.lang.psi.elements.impl.MethodImpl;
+import com.jetbrains.php.lang.psi.elements.impl.PhpClassConstantsListImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -44,6 +42,8 @@ public class SprykerPhpClass {
     private @NotNull PhpNamespace namespaceElement;
     private @NotNull ArrayList<Method> methodElements;
 
+    private @NotNull ArrayList<PhpClassConstantsListImpl> constantElements;
+
     private @NotNull String sprykerPyz;
     private @NotNull String applicationLayer;
     private @NotNull String moduleName;
@@ -55,6 +55,7 @@ public class SprykerPhpClass {
 
         this.classElement = element;
         this.useElements = findUseList(element.getContainingFile());
+        this.constantElements = findClassConstants(this.classElement);
         this.namespaceElement = findNamespace(element.getContainingFile());
         this.methodElements = findMethods(element.getContainingFile());
         init();
@@ -69,6 +70,7 @@ public class SprykerPhpClass {
         this.classElement = element;
 
         this.useElements = findUseList(psiFile);
+        this.constantElements = findClassConstants(this.classElement);
         this.namespaceElement = findNamespace(psiFile);
         this.methodElements = findMethods(psiFile);
         init();
@@ -77,9 +79,9 @@ public class SprykerPhpClass {
     private void init() {
         String[] parts = getFQN().split(Pattern.quote("\\"));
         // parts[0] is empty because of the beginning backslash
-        setSprykerPyz(parts[1]);
-        setApplicationLayer(parts[2]);
-        setModuleName(parts[3]);
+        setSprykerPyz(parts[1]); // Pyz, Spryker...
+        setApplicationLayer(parts[2]); // Zed, Yves...
+        setModuleName(parts[3]); // Module
 
         if (parts.length > 5) {
             setLayer(parts[4]);
@@ -116,6 +118,16 @@ public class SprykerPhpClass {
         }
     }
 
+    public @NotNull String getPath() {
+        VirtualFile vFile = classElement.getContainingFile().getVirtualFile();
+
+        return vFile.getPath().replace("/" + vFile.getName(), "");
+    }
+
+    public @NotNull String getApplicationLayer() {
+        return applicationLayer;
+    }
+
     public @NotNull String getName() {
         return classElement.getContainingFile().getVirtualFile().getNameWithoutExtension();
     }
@@ -134,6 +146,10 @@ public class SprykerPhpClass {
 
     public @NotNull String getCanonicalClassType() {
         return classType.replace("Interface", "");
+    }
+
+    public @NotNull String getModuleName() {
+        return moduleName;
     }
 
     public String getNamespace() {
@@ -222,6 +238,23 @@ public class SprykerPhpClass {
         return useList;
     }
 
+    private @NotNull ArrayList<PhpClassConstantsListImpl> findClassConstants(@NotNull PhpClass myClass) {
+        ArrayList<PhpClassConstantsListImpl> constantsList = new ArrayList<>();
+
+        myClass.acceptChildren(new PsiRecursiveElementVisitor() {
+            @Override
+            public void visitElement(@NotNull PsiElement element) {
+                if (element instanceof PhpClassConstantsListImpl) {
+                    constantsList.add((PhpClassConstantsListImpl) element);
+                }
+
+                super.visitElement(element);
+            }
+        });
+
+        return constantsList;
+    }
+
     private @Nullable PhpClass findPhpClass(@NotNull PsiFile psiFile) {
         final PhpClass[] classes = {null};
         psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
@@ -275,7 +308,6 @@ public class SprykerPhpClass {
         if (this.methodElements.size() > 0) {
             myMethodElement = this.classElement.addAfter(methodElement, this.methodElements.get(this.methodElements.size() - 1));
         } else {
-            // todo figure it out
             myMethodElement = this.classElement.addBefore(methodElement, this.classElement.getLastChild());
         }
 
@@ -314,5 +346,37 @@ public class SprykerPhpClass {
         String replacement = "$1_$2";
 
         return value.replaceAll(regex, replacement).toLowerCase();
+    }
+
+    public void addConstant(@NotNull SprykerPhpClass dependencyClass) {
+        PhpPsiElement constantElement = PhpPsiElementFactory.createClassConstant(
+                project,
+                PhpModifier.PUBLIC_IMPLEMENTED_DYNAMIC,
+                camel2under(dependencyClass.getCanonicalClassType() + dependencyClass.getBaseName()).toUpperCase(),
+                "'" + camel2under(dependencyClass.getCanonicalClassType() + dependencyClass.getBaseName()).toUpperCase() + "'"
+        );
+
+        if (this.constantElements.size() > 0) {
+            this.classElement.addAfter(constantElement, this.constantElements.get(this.constantElements.size() - 1));
+        } else {
+            PsiElement el = findClassBody(classElement);
+            this.classElement.addAfter(constantElement, el);
+        }
+    }
+
+    private PsiElement findClassBody(@NotNull PhpClass myClass) {
+        final PsiElement[] elements = {null};
+        myClass.acceptChildren(new PsiRecursiveElementVisitor() {
+            @Override
+            public void visitElement(@NotNull PsiElement element) {
+                if (element.getText().equals("{") && elements[0] == null) {
+                    elements[0] = (PsiElement) element;
+                }
+
+                super.visitElement(element);
+            }
+        });
+
+        return elements[0];
     }
 }
