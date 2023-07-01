@@ -9,7 +9,6 @@ import com.intellij.psi.search.FilenameIndex;
 import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.IOException;
 import java.util.Collection;
 
 public class SprykerDependencyCreator {
@@ -48,10 +47,21 @@ public class SprykerDependencyCreator {
 
     public void addToDependencyProvider() {
         addConstantToDependencyProvider();
+        addUseStatementToDependencyProvider();
+        addSetDependencyMethodToDependencyProvider();
     }
 
     private void addConstantToDependencyProvider() {
         dependencyProviderClass.addConstant(dependencyClass);
+    }
+
+    private void addUseStatementToDependencyProvider() {
+        String fqn = String.format("\\Spryker\\%s\\Kernel\\Container", this.dependencyClass.getApplicationLayer());
+        dependencyProviderClass.addUseElement(fqn);
+    }
+
+    private void addSetDependencyMethodToDependencyProvider() {
+        dependencyProviderClass.addSetDependency(dependencyClass);
     }
 
     private void addGetterMethodToFactory() {
@@ -60,6 +70,15 @@ public class SprykerDependencyCreator {
 
     private void addUseStatementToFactory() {
         String fqn = this.dependencyClass.getFQN();
+        this.factoryFile.addUseElement(fqn);
+
+        fqn = String.format("\\%s\\%s\\%s\\%sDependencyProvider",
+                AppSettingsState.getInstance().pyzNamespace,
+                this.factoryFile.getApplicationLayer(),
+                this.factoryFile.getModuleName(),
+                this.factoryFile.getModuleName()
+        );
+
         this.factoryFile.addUseElement(fqn);
     }
 }

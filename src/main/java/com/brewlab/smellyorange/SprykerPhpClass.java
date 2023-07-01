@@ -1,5 +1,9 @@
 package com.brewlab.smellyorange;
 
+import com.brewlab.smellyorange.Psi.ConstantFinder;
+import com.brewlab.smellyorange.Psi.MethodFinder;
+import com.brewlab.smellyorange.Psi.UseFinder;
+import com.brewlab.smellyorange.Utils.StringUtils;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
@@ -287,74 +291,58 @@ public class SprykerPhpClass {
         this.useElements.add(useElement);
     }
 
-    private boolean useElementAlreadyExists(@NotNull PhpUseList useElement) {
-        for (PhpUseList element:this.useElements) {
-            if (useElement.getText().equals(element.getText())) {
-                return true;
-            }
-        }
-
-        return false;
+    public void addGetMethod(@NotNull SprykerPhpClass dependencyClass) {
+        addMethodWithDocBlock(
+                createGetDependencyMethodString(dependencyClass),
+                "/**\n * @return " + dependencyClass.getFQN() + "\n */\nfunction a() {}"
+        );
     }
 
-    public void addGetMethod(@NotNull SprykerPhpClass dependencyClass) {
-        Method methodElement = PhpPsiElementFactory.createMethod(this.project, createGetDependencyMethod(dependencyClass));
+    private boolean useElementAlreadyExists(@NotNull PhpUseList useElement) {
+        UseFinder finder = new UseFinder();
+        PhpUseList useElementFound = finder.findOwnUseStatement(this.classElement.getContainingFile(), useElement);
 
-        if (methodAlreadyExists(methodElement)) {
-            return;
-        }
-
-        PsiElement myMethodElement = null;
-        if (this.methodElements.size() > 0) {
-            myMethodElement = this.classElement.addAfter(methodElement, this.methodElements.get(this.methodElements.size() - 1));
-        } else {
-            myMethodElement = this.classElement.addBefore(methodElement, this.classElement.getLastChild());
-        }
-
-        assert myMethodElement != null;
-
-        this.methodElements.add(methodElement);
-
-//        Document myDocument = PsiDocumentManager.getInstance(this.project).getDocument(this.classElement.getContainingFile());
-//        PsiDocumentManager.getInstance(this.project).doPostponedOperationsAndUnblockDocument(myDocument);
-
-        PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, "/**\n * @return " + dependencyClass.getFQN() + "\n */\nfunction a() {}");
-        myMethodElement.getParent().addBefore(phpDoc, myMethodElement);
+        return useElementFound != null;
     }
 
     private boolean methodAlreadyExists(@NotNull Method methodElement) {
-        for (Method element:this.methodElements) {
-            if (methodElement.getName().equals(element.getName())) {
-                return true;
-            }
-        }
+        MethodFinder finder = new MethodFinder();
+        Method methodFound = finder.findImplementedOwnMethodByName(this.classElement.getContainingFile(), methodElement.getName());
 
-        return false;
+        return methodFound != null;
     }
 
-    private String createGetDependencyMethod(@NotNull SprykerPhpClass dependencyClass) {
+    private boolean constantAlreadyExists(@NotNull PhpPsiElement constantElement) {
+        ConstantFinder finder = new ConstantFinder();
+        PhpPsiElement constantFound = finder.findOwnConstant(this.classElement.getContainingFile(), constantElement);
+
+        return constantFound != null;
+    }
+
+    private String createGetDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
         return String.format("public function get%s(): %s{return $this->getProvidedDependency(%s::%s);}",
                 dependencyClass.getCanonicalName(),
                 dependencyClass.getName(),
                 getDependencyProviderName(),
-                camel2under(dependencyClass.getCanonicalClassType() + dependencyClass.getBaseName()).toUpperCase()
+                createConstantName(dependencyClass)
         );
     }
 
-    private @NotNull String camel2under(@NotNull final String value) {
-        String regex = "([a-z])([A-Z])";
-        String replacement = "$1_$2";
-
-        return value.replaceAll(regex, replacement).toLowerCase();
+    private @NotNull String createConstantName(@NotNull SprykerPhpClass myClass) {
+        return StringUtils.camel2under(myClass.getCanonicalClassType() + myClass.getBaseName()).toUpperCase();
     }
 
     public void addConstant(@NotNull SprykerPhpClass dependencyClass) {
         PhpPsiElement constantElement = PhpPsiElementFactory.createClassConstant(
                 project,
                 PhpModifier.PUBLIC_IMPLEMENTED_DYNAMIC,
-                camel2under(dependencyClass.getCanonicalClassType() + dependencyClass.getBaseName()).toUpperCase(),
-                "'" + camel2under(dependencyClass.getCanonicalClassType() + dependencyClass.getBaseName()).toUpperCase() + "'"
+                createConstantName(dependencyClass),
+                "'" + createConstantName(dependencyClass) + "'"
         );
+
+        if (constantAlreadyExists(constantElement)) {
+            return;
+        }
 
         if (this.constantElements.size() > 0) {
             this.classElement.addAfter(constantElement, this.constantElements.get(this.constantElements.size() - 1));
@@ -378,5 +366,49 @@ public class SprykerPhpClass {
         });
 
         return elements[0];
+    }
+
+    public void addSetDependency(SprykerPhpClass dependencyClass) {
+        addMethodWithDocBlock(
+                createAddDependencyMethodString(dependencyClass),
+                "/**\n * @param Container $container\n\n * @return void\n */\nfunction a() {}"
+        );
+    }
+
+    private void addMethodWithDocBlock(@NotNull String methodString, @Nullable String docBlockString) {
+        Method methodElement = PhpPsiElementFactory.createMethod(this.project, methodString);
+
+        if (methodAlreadyExists(methodElement)) {
+            return;
+        }
+
+        PsiElement myMethodElement = null;
+        if (this.methodElements.size() > 0) {
+            myMethodElement = this.classElement.addAfter(methodElement, this.methodElements.get(this.methodElements.size() - 1));
+        } else {
+            myMethodElement = this.classElement.addBefore(methodElement, this.classElement.getLastChild());
+        }
+
+        assert myMethodElement != null;
+
+        this.methodElements.add(methodElement);
+
+        if (docBlockString != null) {
+            PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, docBlockString);
+            myMethodElement.getParent().addBefore(phpDoc, myMethodElement);
+        }
+    }
+
+    private String createAddDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
+        return String.format("private function add%s(Container $container): void {" +
+                        "$container->set(self::%s, static function (Container $container) {" +
+                        "return $container->getLocator()->%s()->%s();" +
+                        "});" +
+                        "}",
+                dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
+                createConstantName(dependencyClass),
+                StringUtils.lcFirst(dependencyClass.getBaseName()),
+                StringUtils.lcFirst(dependencyClass.getCanonicalClassType())
+        );
     }
 }
