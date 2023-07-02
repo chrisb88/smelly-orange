@@ -1,8 +1,6 @@
 package com.brewlab.smellyorange;
 
-import com.brewlab.smellyorange.Psi.ConstantFinder;
-import com.brewlab.smellyorange.Psi.MethodFinder;
-import com.brewlab.smellyorange.Psi.UseFinder;
+import com.brewlab.smellyorange.Psi.*;
 import com.brewlab.smellyorange.Utils.StringUtils;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -10,15 +8,19 @@ import com.intellij.psi.*;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.PhpPsiElementFactory;
 import com.jetbrains.php.lang.psi.elements.*;
-import com.jetbrains.php.lang.psi.elements.impl.MethodImpl;
 import com.jetbrains.php.lang.psi.elements.impl.PhpClassConstantsListImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.regex.Pattern;
 
 public class SprykerPhpClass {
+    public enum factoryTypes {
+        BusinessFactory,
+        CommunicationFactory,
+        PersistenceFactory
+    }
+
     private final String[] postFixes = {
             "BusinessFactory",
             "CommunicationFactory",
@@ -42,11 +44,6 @@ public class SprykerPhpClass {
     protected @NotNull String baseName = "";
     protected @NotNull String classType = "unknown";
     protected @NotNull PhpClass classElement;
-    protected @NotNull ArrayList<PhpUseList> useElements;
-    private @NotNull PhpNamespace namespaceElement;
-    private @NotNull ArrayList<Method> methodElements;
-
-    private @NotNull ArrayList<PhpClassConstantsListImpl> constantElements;
 
     private @NotNull String sprykerPyz;
     private @NotNull String applicationLayer;
@@ -58,10 +55,6 @@ public class SprykerPhpClass {
         PsiDocumentManager.getInstance(this.project).commitAllDocuments();
 
         this.classElement = element;
-        this.useElements = findUseList(element.getContainingFile());
-        this.constantElements = findClassConstants(this.classElement);
-        this.namespaceElement = findNamespace(element.getContainingFile());
-        this.methodElements = findMethods(element.getContainingFile());
         init();
     }
 
@@ -69,14 +62,7 @@ public class SprykerPhpClass {
         this.project = project;
         PsiDocumentManager.getInstance(this.project).commitAllDocuments();
 
-        PhpClass element = findPhpClass(psiFile);
-        assert element != null;
-        this.classElement = element;
-
-        this.useElements = findUseList(psiFile);
-        this.constantElements = findClassConstants(this.classElement);
-        this.namespaceElement = findNamespace(psiFile);
-        this.methodElements = findMethods(psiFile);
+        this.classElement = findPhpClass(psiFile);
         init();
     }
 
@@ -156,7 +142,7 @@ public class SprykerPhpClass {
         return moduleName;
     }
 
-    public String getNamespace() {
+    public @NotNull String getNamespace() {
         return classElement.getNamespaceName();
     }
 
@@ -191,90 +177,25 @@ public class SprykerPhpClass {
         return classElement.getFQN();
     }
 
-    private @NotNull ArrayList<Method> findMethods(@NotNull PsiFile psiFile) {
-        ArrayList<Method> methodList = new ArrayList<>();
+    /**
+     * Finds the PHP class in the given file.
+     *
+     * @param psiFile File to search the class in
+     */
+    private @NotNull PhpClass findPhpClass(@NotNull PsiFile psiFile) {
+        PhpClassFinder finder = new PhpClassFinder();
+        PhpClass myClass = finder.findPhpClass(psiFile);
+        assert myClass != null;
 
-//        Method[] m = this.classElement.getOwnMethods();
-        psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element instanceof MethodImpl) {
-                    methodList.add((Method) element);
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return methodList;
+        return myClass;
     }
 
-    private PhpNamespace findNamespace(@NotNull PsiFile psiFile) {
-        final PhpNamespace[] ns = {null};
-        psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element instanceof PhpNamespace) {
-                    ns[0] = (PhpNamespace) element;
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return ns[0];
-    }
-
-    private @NotNull ArrayList<PhpUseList> findUseList(@NotNull PsiFile psiFile) {
-        ArrayList<PhpUseList> useList = new ArrayList<>();
-
-        psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element instanceof PhpUseList) {
-                    useList.add((PhpUseList) element);
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return useList;
-    }
-
-    private @NotNull ArrayList<PhpClassConstantsListImpl> findClassConstants(@NotNull PhpClass myClass) {
-        ArrayList<PhpClassConstantsListImpl> constantsList = new ArrayList<>();
-
-        myClass.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element instanceof PhpClassConstantsListImpl) {
-                    constantsList.add((PhpClassConstantsListImpl) element);
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return constantsList;
-    }
-
-    private @Nullable PhpClass findPhpClass(@NotNull PsiFile psiFile) {
-        final PhpClass[] classes = {null};
-        psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element instanceof PhpClass) {
-                    classes[0] = (PhpClass) element;
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return classes[0];
-    }
-
+    /**
+     * Adds a use element with the given FQN to the file of this class.
+     * Does nothing if the use statement already exists.
+     *
+     * @param fqn The FQN to add
+     */
     public void addUseElement(@NotNull String fqn) {
         PhpUseList useElement = PhpPsiElementFactory.createUseStatement(project, fqn, null);
 
@@ -282,15 +203,21 @@ public class SprykerPhpClass {
             return;
         }
 
-        if (this.useElements.size() > 0) {
-            this.classElement.getParent().addAfter(useElement, this.useElements.get(this.useElements.size() - 1));
+        UseFinder finder = new UseFinder();
+        PhpUseList lastUseStatement = finder.findLastOwnUseStatement(this.classElement.getContainingFile());
+        if (lastUseStatement != null) {
+            this.classElement.getParent().addAfter(useElement, lastUseStatement);
         } else {
             this.classElement.getParent().addBefore(useElement, this.classElement);
         }
-
-        this.useElements.add(useElement);
     }
 
+    /**
+     * Adds the 'get dependency' method to this class.
+     * Adds also a doc block to the method.
+     *
+     * @param dependencyClass The dependant class to add
+     */
     public void addGetMethod(@NotNull SprykerPhpClass dependencyClass) {
         addMethodWithDocBlock(
                 createGetDependencyMethodString(dependencyClass),
@@ -298,6 +225,11 @@ public class SprykerPhpClass {
         );
     }
 
+    /**
+     * Checks if the given use statement already exists in this class.
+     *
+     * @param useElement Use element to check
+     */
     private boolean useElementAlreadyExists(@NotNull PhpUseList useElement) {
         UseFinder finder = new UseFinder();
         PhpUseList useElementFound = finder.findOwnUseStatement(this.classElement.getContainingFile(), useElement);
@@ -305,6 +237,11 @@ public class SprykerPhpClass {
         return useElementFound != null;
     }
 
+    /**
+     * Checks if the given method already exists in this class.
+     *
+     * @param methodElement The method element to check
+     */
     private boolean methodAlreadyExists(@NotNull Method methodElement) {
         MethodFinder finder = new MethodFinder();
         Method methodFound = finder.findImplementedOwnMethodByName(this.classElement.getContainingFile(), methodElement.getName());
@@ -312,13 +249,24 @@ public class SprykerPhpClass {
         return methodFound != null;
     }
 
+    /**
+     * Checks if the given constant already exists in this class.
+     *
+     * @param constantElement The element to check
+     */
     private boolean constantAlreadyExists(@NotNull PhpPsiElement constantElement) {
         ConstantFinder finder = new ConstantFinder();
-        PhpPsiElement constantFound = finder.findOwnConstant(this.classElement.getContainingFile(), constantElement);
+        PhpClassConstantsListImpl constantFound = finder.findOwnConstant(this.classElement.getContainingFile(), constantElement);
 
         return constantFound != null;
     }
 
+    /**
+     * Create the dependency getter method string.
+     *
+     * @param dependencyClass The dependant class to add
+     * @return Created method string
+     */
     private String createGetDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
         return String.format("public function get%s(): %s{return $this->getProvidedDependency(%s::%s);}",
                 dependencyClass.getCanonicalName(),
@@ -328,10 +276,22 @@ public class SprykerPhpClass {
         );
     }
 
+    /**
+     * Creates the dependency constant of the given class in the form of TYPE_MODULE_NAME.
+     *
+     * @param myClass Class to create the constant string from
+     * @return Created constant string
+     */
     private @NotNull String createConstantName(@NotNull SprykerPhpClass myClass) {
         return StringUtils.camel2under(myClass.getCanonicalClassType() + myClass.getBaseName()).toUpperCase();
     }
 
+    /**
+     * Adds the dependency constant to this class in the form of TYPE_MODULE_NAME.
+     * Does nothing if the constant already exists.
+     *
+     * @param dependencyClass The dependant class to add
+     */
     public void addConstant(@NotNull SprykerPhpClass dependencyClass) {
         PhpPsiElement constantElement = PhpPsiElementFactory.createClassConstant(
                 project,
@@ -344,30 +304,23 @@ public class SprykerPhpClass {
             return;
         }
 
-        if (this.constantElements.size() > 0) {
-            this.classElement.addAfter(constantElement, this.constantElements.get(this.constantElements.size() - 1));
+        ConstantFinder finder = new ConstantFinder();
+        PhpClassConstantsListImpl lastConstant = finder.findLastOwnConstant(this.classElement.getContainingFile());
+        if (lastConstant != null) {
+            this.classElement.addAfter(constantElement, lastConstant);
         } else {
-            PsiElement el = findClassBody(classElement);
+            PhpClassFinder classFinder = new PhpClassFinder();
+            PsiElement el = classFinder.findClassBody(classElement);
             this.classElement.addAfter(constantElement, el);
         }
     }
 
-    private PsiElement findClassBody(@NotNull PhpClass myClass) {
-        final PsiElement[] elements = {null};
-        myClass.acceptChildren(new PsiRecursiveElementVisitor() {
-            @Override
-            public void visitElement(@NotNull PsiElement element) {
-                if (element.getText().equals("{") && elements[0] == null) {
-                    elements[0] = (PsiElement) element;
-                }
-
-                super.visitElement(element);
-            }
-        });
-
-        return elements[0];
-    }
-
+    /**
+     * Adds the 'add dependency method' to this class.
+     * Adds also a doc block to the method.
+     *
+     * @param dependencyClass The dependant class to add
+     */
     public void addSetDependency(SprykerPhpClass dependencyClass) {
         addMethodWithDocBlock(
                 createAddDependencyMethodString(dependencyClass),
@@ -375,6 +328,12 @@ public class SprykerPhpClass {
         );
     }
 
+    /**
+     * Adds a method with doc block to this class.
+     *
+     * @param methodString Complete method as string
+     * @param docBlockString Doc block as string
+     */
     private void addMethodWithDocBlock(@NotNull String methodString, @Nullable String docBlockString) {
         Method methodElement = PhpPsiElementFactory.createMethod(this.project, methodString);
 
@@ -383,15 +342,15 @@ public class SprykerPhpClass {
         }
 
         PsiElement myMethodElement = null;
-        if (this.methodElements.size() > 0) {
-            myMethodElement = this.classElement.addAfter(methodElement, this.methodElements.get(this.methodElements.size() - 1));
+        MethodFinder finder = new MethodFinder();
+        Method lastMethod = finder.findLastImplementedOwnMethod(this.classElement.getContainingFile());
+        if (lastMethod != null) {
+            myMethodElement = this.classElement.addAfter(methodElement, lastMethod);
         } else {
             myMethodElement = this.classElement.addBefore(methodElement, this.classElement.getLastChild());
         }
 
         assert myMethodElement != null;
-
-        this.methodElements.add(methodElement);
 
         if (docBlockString != null) {
             PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, docBlockString);
@@ -399,6 +358,12 @@ public class SprykerPhpClass {
         }
     }
 
+    /**
+     * Creates the 'add dependency method' as string.
+     *
+     * @param dependencyClass The dependant class to add
+     * @return The method string
+     */
     private String createAddDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
         return String.format("private function add%s(Container $container): void {" +
                         "$container->set(self::%s, static function (Container $container) {" +
@@ -410,5 +375,9 @@ public class SprykerPhpClass {
                 StringUtils.lcFirst(dependencyClass.getBaseName()),
                 StringUtils.lcFirst(dependencyClass.getCanonicalClassType())
         );
+    }
+
+    public void addDependencyGetCallToProvider(@NotNull String providerMethod) {
+        // TODO
     }
 }
