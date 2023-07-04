@@ -5,7 +5,9 @@ import com.brewlab.smellyorange.Utils.StringUtils;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
+import com.intellij.psi.codeStyle.CodeStyleManager;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
+import com.jetbrains.php.lang.psi.PhpCodeEditUtil;
 import com.jetbrains.php.lang.psi.PhpPsiElementFactory;
 import com.jetbrains.php.lang.psi.elements.*;
 import com.jetbrains.php.lang.psi.elements.impl.PhpClassConstantsListImpl;
@@ -152,11 +154,19 @@ public class SprykerPhpClass {
     }
 
     public boolean isBusinessFactoryClass() {
-        return getName().endsWith("BusinessFactory");
+        return getName().endsWith(factoryTypes.BusinessFactory.toString());
+    }
+
+    public boolean isCommunicationFactoryClass() {
+        return getName().endsWith(factoryTypes.CommunicationFactory.toString());
+    }
+
+    public boolean isPersistenceFactoryClass() {
+        return getName().endsWith(factoryTypes.PersistenceFactory.toString());
     }
 
     public boolean isFactoryClass() {
-        return getName().endsWith("BusinessFactory")
+        return getName().endsWith(factoryTypes.BusinessFactory.toString())
                 || getName().endsWith("Factory");
     }
 
@@ -304,15 +314,7 @@ public class SprykerPhpClass {
             return;
         }
 
-        ConstantFinder finder = new ConstantFinder();
-        PhpClassConstantsListImpl lastConstant = finder.findLastOwnConstant(this.classElement.getContainingFile());
-        if (lastConstant != null) {
-            this.classElement.addAfter(constantElement, lastConstant);
-        } else {
-            PhpClassFinder classFinder = new PhpClassFinder();
-            PsiElement el = classFinder.findClassBody(classElement);
-            this.classElement.addAfter(constantElement, el);
-        }
+        PhpCodeEditUtil.insertClassMember(this.classElement, constantElement);
     }
 
     /**
@@ -334,28 +336,17 @@ public class SprykerPhpClass {
      * @param methodString Complete method as string
      * @param docBlockString Doc block as string
      */
-    private void addMethodWithDocBlock(@NotNull String methodString, @Nullable String docBlockString) {
+    private void addMethodWithDocBlock(@NotNull String methodString, @NotNull String docBlockString) {
         Method methodElement = PhpPsiElementFactory.createMethod(this.project, methodString);
 
         if (methodAlreadyExists(methodElement)) {
             return;
         }
 
-        PsiElement myMethodElement = null;
-        MethodFinder finder = new MethodFinder();
-        Method lastMethod = finder.findLastImplementedOwnMethod(this.classElement.getContainingFile());
-        if (lastMethod != null) {
-            myMethodElement = this.classElement.addAfter(methodElement, lastMethod);
-        } else {
-            myMethodElement = this.classElement.addBefore(methodElement, this.classElement.getLastChild());
-        }
+        PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, docBlockString);
+        PhpCodeEditUtil.insertClassMemberWithPhpDoc(this.classElement, methodElement, phpDoc);
 
-        assert myMethodElement != null;
-
-        if (docBlockString != null) {
-            PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, docBlockString);
-            myMethodElement.getParent().addBefore(phpDoc, myMethodElement);
-        }
+        CodeStyleManager.getInstance(this.project).reformat(this.classElement);
     }
 
     /**

@@ -1,15 +1,15 @@
 package com.brewlab.smellyorange;
 
+import com.brewlab.smellyorange.Psi.FileCreator;
+import com.brewlab.smellyorange.Psi.FileFinder;
+import com.brewlab.smellyorange.Psi.ProjectFileFinder;
+import com.brewlab.smellyorange.Psi.SprykerFileFinder;
+import com.brewlab.smellyorange.Utils.StringUtils;
 import com.brewlab.smellyorange.settings.AppSettingsState;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
-import com.intellij.psi.search.FilenameIndex;
-import com.intellij.psi.search.GlobalSearchScope;
+import com.intellij.psi.*;
 import org.jetbrains.annotations.NotNull;
-
-import java.util.Collection;
+import org.jetbrains.annotations.Nullable;
 
 public class SprykerDependencyCreator {
     private final @NotNull Project project;
@@ -27,21 +27,53 @@ public class SprykerDependencyCreator {
     private @NotNull SprykerPhpClass resolveDependencyProvider(@NotNull SprykerPhpClass factoryClass) {
         String fileName = factoryClass.getModuleName() + "DependencyProvider.php";
         String filePath = project.getBasePath() + AppSettingsState.getInstance().pyzDirectory + factoryClass.getApplicationLayer() + "/" + factoryClass.getModuleName();
-        Collection<VirtualFile> vFilesFound = FilenameIndex.getVirtualFilesByName(fileName, GlobalSearchScope.allScope(project));
-        for (VirtualFile vFile:vFilesFound) {
-            if (vFile.getParent().getPath().equals(filePath)) {
-                PsiFile psiFile = PsiManager.getInstance(project).findFile(vFile);
-                assert psiFile != null;
 
-                return new SprykerPhpClass(psiFile, project);
-            }
+        FileFinder finder = new ProjectFileFinder(project);
+        PsiFile psiFile = finder.find(fileName, filePath);
+        if (psiFile != null) {
+            return new SprykerPhpClass(psiFile, project);
         }
 
-        // TODO if the file exists only in spryker, create a new file and extend the spryker one
+        finder = new SprykerFileFinder(project);
+        psiFile = finder.find(fileName, filePath);
+        if (psiFile != null) {
+            psiFile = extendFromSpryker(psiFile);
+            assert psiFile != null;
 
-        // TODO if there is no file, create it
+            return new SprykerPhpClass(psiFile, project);
+        }
 
-        throw new RuntimeException("DependencyProvider not found.");
+        psiFile = createNewDependencyProviderFile(fileName);
+        assert psiFile != null;
+
+        return new SprykerPhpClass(psiFile, project);
+    }
+
+    private @Nullable PsiFile createNewDependencyProviderFile(final @NotNull String filename) {
+        String namespace = AppSettingsState.getInstance().pyzNamespace + "\\" + factoryClass.getApplicationLayer() + "\\" + factoryClass.getModuleName();
+        String className = factoryClass.getModuleName() + "DependencyProvider";
+        String template = String.format("<?php\n\nnamespace %s;\n\nclass %s {}", namespace, className);
+
+        FileCreator creator = new FileCreator(this.project);
+        return creator.createPhpFileFromText(template, filename, this.factoryClass.getVirtualFile().getParent());
+    }
+
+    private @Nullable PsiFile extendFromSpryker(final @NotNull PsiFile sprykerPsiFile) {
+        SprykerPhpClass myClass = new SprykerPhpClass(sprykerPsiFile, this.project);
+        String template = String.format("<?php\n\nnamespace %s;\n\nuse %s;\n\nclass %s extends %s {}",
+                StringUtils.trimBackslashes(toPyzNamespace(myClass.getNamespace())),
+                StringUtils.trimBackslashes(myClass.getNamespace()) + "\\" + myClass.getBaseName() + "DependencyProvider as Spryker" + myClass.getBaseName() + "DependencyProvider",
+                myClass.getBaseName() + "DependencyProvider",
+                "Spryker" + myClass.getBaseName() + "DependencyProvider"
+        );
+
+        FileCreator creator = new FileCreator(this.project);
+        return creator.createPhpFileFromText(template, myClass.getBaseName() + "DependencyProvider.php", this.factoryClass.getVirtualFile().getParent());
+    }
+
+    private @NotNull String toPyzNamespace(@NotNull String namespace) {
+        return namespace.replace("Spryker\\", AppSettingsState.getInstance().pyzNamespace + "\\")
+                .replace("SprykerShop\\", AppSettingsState.getInstance().pyzNamespace + "\\");
     }
 
     public void addToFactory() {
@@ -63,15 +95,15 @@ public class SprykerDependencyCreator {
 
     private @NotNull String resolveProviderMethod(@NotNull SprykerPhpClass factoryClass) {
         String type = factoryClass.getClassType();
-        if (SprykerPhpClass.factoryTypes.BusinessFactory.toString().equals(type)) {
+        if (factoryClass.isBusinessFactoryClass()) {
             return "provideBusinessLayerDependencies";
         }
 
-        if (SprykerPhpClass.factoryTypes.CommunicationFactory.toString().equals(type)) {
+        if (factoryClass.isCommunicationFactoryClass()) {
             return "provideCommunicationLayerDependencies";
         }
 
-        if (SprykerPhpClass.factoryTypes.PersistenceFactory.toString().equals(type)) {
+        if (factoryClass.isPersistenceFactoryClass()) {
             return "providePersistenceLayerDependencies";
         }
 
