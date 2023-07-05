@@ -14,6 +14,7 @@ import com.jetbrains.php.lang.psi.elements.impl.PhpClassConstantsListImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.List;
 import java.util.regex.Pattern;
 
 public class SprykerPhpClass {
@@ -23,10 +24,13 @@ public class SprykerPhpClass {
         PersistenceFactory
     }
 
+    public enum applicationLayerTypes {Yves, Zed, Glue, Service, Client}
+
     private final String[] postFixes = {
             "BusinessFactory",
             "CommunicationFactory",
             "PersistenceFactory",
+            "ServiceFactory",
             "Factory",
             "Facade",
             "FacadeInterface",
@@ -120,6 +124,26 @@ public class SprykerPhpClass {
         return applicationLayer;
     }
 
+    public boolean isYves() {
+        return applicationLayerTypes.Yves.toString().equals(getApplicationLayer());
+    }
+
+    public boolean isZed() {
+        return applicationLayerTypes.Zed.toString().equals(getApplicationLayer());
+    }
+
+    public boolean isGlue() {
+        return applicationLayerTypes.Glue.toString().equals(getApplicationLayer());
+    }
+
+    public boolean isService() {
+        return applicationLayerTypes.Service.toString().equals(getApplicationLayer());
+    }
+
+    public boolean isClient() {
+        return applicationLayerTypes.Client.toString().equals(getApplicationLayer());
+    }
+
     public @NotNull String getName() {
         return classElement.getContainingFile().getVirtualFile().getNameWithoutExtension();
     }
@@ -180,7 +204,7 @@ public class SprykerPhpClass {
     }
 
     public @NotNull String getDependencyProviderName() {
-        return getBaseName() + "DependencyProvider";
+        return getModuleName() + "DependencyProvider";
     }
 
     public @NotNull String getFQN() {
@@ -368,7 +392,46 @@ public class SprykerPhpClass {
         );
     }
 
-    public void addDependencyGetCallToProvider(@NotNull String providerMethod) {
-        // TODO
+    public void addDependencyGetCallToProvider(@NotNull String providerMethod, @NotNull SprykerPhpClass dependencyClass) {
+        final String methodString = createGetCallToProviderMethodString(providerMethod, dependencyClass);
+        final Method methodElement = PhpPsiElementFactory.createMethod(this.project, methodString);
+
+        if (!methodAlreadyExists(methodElement)) {
+            addMethodWithDocBlock(
+                    createGetCallToProviderMethodString(providerMethod, dependencyClass),
+                    "/**\n * @param Container $container\n\n * @return Container\n */\nfunction a() {}"
+            );
+
+            return;
+        }
+
+        MethodFinder methodFinder = new MethodFinder();
+        Method methodFound = methodFinder.findImplementedOwnMethodByName(this.classElement.getContainingFile(), methodElement.getName());
+        assert methodFound != null;
+
+        StatementFinder statementFinder = new StatementFinder();
+        List<Statement> statements = statementFinder.findStatements(methodFound);
+        if (statements.isEmpty()) {
+            return;
+        }
+
+        String statementString = String.format("$this->add%s($container);", dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType());
+        Statement statement = (Statement) PhpPsiElementFactory.createFromText(this.project, Statement.class, statementString);
+        assert statement != null;
+        methodFound.addAfter(statement, statements.get(statements.size() - 1));
+
+        CodeStyleManager.getInstance(this.project).reformat(methodFound);
+    }
+
+    private @NotNull String createGetCallToProviderMethodString(@NotNull String methodName, @NotNull SprykerPhpClass dependencyClass) {
+        return String.format("public function %s(Container $container): Container {" +
+                        "   $container = parent::%s($container);" +
+                        "   $this->add%s($container);" +
+                        "   return $container;" +
+                        "}",
+                methodName,
+                methodName,
+                dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType()
+        );
     }
 }

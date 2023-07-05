@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 
 public class MethodFinder {
-    public Method findImplementedOwnMethodByName(@NotNull PsiFile psiFile, @NotNull String name) {
+    public @Nullable Method findImplementedOwnMethodByName(@NotNull PsiFile psiFile, @NotNull String name) {
         final Method[] elementFound = {null};
         psiFile.acceptChildren(new PsiRecursiveElementVisitor() {
             @Override
