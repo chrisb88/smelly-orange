@@ -49,9 +49,10 @@ public class AddDependencyAction extends AnAction {
             SprykerDependencyCreator creator = new SprykerDependencyCreator(project, spyFactoryClass, spyClass);
             creator.addToFactory();
             creator.addToDependencyProvider();
+            creator.processImports();
         });
 
-        System.out.println("Action performed.");
+        System.out.println("Dependency added.");
     }
 
     private @Nullable PhpClass showAndSelectPhpInterfaceDialog(@NotNull Project project) {

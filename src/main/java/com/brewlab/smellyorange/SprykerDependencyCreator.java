@@ -106,13 +106,11 @@ public class SprykerDependencyCreator {
     }
 
     public void addToFactory() {
-        addUseStatementToFactory();
         addGetterMethodToFactory();
     }
 
     public void addToDependencyProvider() {
         addConstantToDependencyProvider();
-        addUseStatementToDependencyProvider();
         addSetDependencyMethodToDependencyProvider();
         addCallToProviderMethod();
     }
@@ -155,11 +153,6 @@ public class SprykerDependencyCreator {
         dependencyProviderClass.addConstant(dependencyClass);
     }
 
-    private void addUseStatementToDependencyProvider() {
-        String fqn = String.format("\\Spryker\\%s\\Kernel\\Container", this.dependencyProviderClass.getApplicationLayer());
-        dependencyProviderClass.addUseElement(fqn);
-    }
-
     private void addSetDependencyMethodToDependencyProvider() {
         dependencyProviderClass.addSetDependency(dependencyClass);
     }
@@ -168,17 +161,8 @@ public class SprykerDependencyCreator {
         this.factoryClass.addGetMethod(this.dependencyClass);
     }
 
-    private void addUseStatementToFactory() {
-        String fqn = this.dependencyClass.getFQN();
-        this.factoryClass.addUseElement(fqn);
-
-        fqn = String.format("\\%s\\%s\\%s\\%sDependencyProvider",
-                AppSettingsState.getInstance().pyzNamespace,
-                this.factoryClass.getApplicationLayer(),
-                this.factoryClass.getModuleName(),
-                this.factoryClass.getModuleName()
-        );
-
-        this.factoryClass.addUseElement(fqn);
+    public void processImports() {
+        this.factoryClass.processImports();
+        this.dependencyProviderClass.processImports();
     }
 }

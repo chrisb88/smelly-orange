@@ -2,6 +2,7 @@ package com.brewlab.smellyorange;
 
 import com.brewlab.smellyorange.Psi.*;
 import com.brewlab.smellyorange.Utils.StringUtils;
+import com.brewlab.smellyorange.settings.AppSettingsState;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
@@ -14,7 +15,7 @@ import com.jetbrains.php.lang.psi.elements.impl.PhpClassConstantsListImpl;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 public class SprykerPhpClass {
@@ -55,6 +56,8 @@ public class SprykerPhpClass {
     private @NotNull String applicationLayer;
     private @NotNull String moduleName;
     private @Nullable String layer;
+
+    public @NotNull Set<String> importList = new HashSet<>();
 
     public SprykerPhpClass (@NotNull final PhpClass element, @NotNull final Project project) {
         this.project = project;
@@ -203,8 +206,13 @@ public class SprykerPhpClass {
         return classElement.getContainingFile().getVirtualFile();
     }
 
-    public @NotNull String getDependencyProviderName() {
-        return getModuleName() + "DependencyProvider";
+    public @NotNull String getDependencyProviderFQN() {
+        return String.format("\\%s\\%s\\%s\\%sDependencyProvider",
+                AppSettingsState.getInstance().pyzNamespace,
+                this.getApplicationLayer(),
+                this.getModuleName(),
+                this.getModuleName()
+        );
     }
 
     public @NotNull String getFQN() {
@@ -302,10 +310,13 @@ public class SprykerPhpClass {
      * @return Created method string
      */
     private String createGetDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
+        addImport(dependencyClass.getFQN());
+        addImport(getDependencyProviderFQN());
+
         return String.format("public function get%s(): %s{return $this->getProvidedDependency(%s::%s);}",
                 dependencyClass.getCanonicalName(),
-                dependencyClass.getName(),
-                getDependencyProviderName(),
+                dependencyClass.getFQN(),
+                getDependencyProviderFQN(),
                 createConstantName(dependencyClass)
         );
     }
@@ -350,8 +361,13 @@ public class SprykerPhpClass {
     public void addSetDependency(SprykerPhpClass dependencyClass) {
         addMethodWithDocBlock(
                 createAddDependencyMethodString(dependencyClass),
-                "/**\n * @param Container $container\n\n * @return void\n */\nfunction a() {}"
+                String.format(
+                        "/**\n * @param \\Spryker\\%s\\Kernel\\Container $container\n\n * @return void\n */\nfunction a() {}",
+                        getApplicationLayer()
+                )
         );
+
+        addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
     }
 
     /**
@@ -380,13 +396,17 @@ public class SprykerPhpClass {
      * @return The method string
      */
     private String createAddDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
-        return String.format("private function add%s(Container $container): void {" +
-                        "$container->set(self::%s, static function (Container $container) {" +
+        addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
+
+        return String.format("private function add%s(\\Spryker\\%s\\Kernel\\Container $container): void {" +
+                        "$container->set(self::%s, static function (\\Spryker\\%s\\Kernel\\Container $container) {" +
                         "return $container->getLocator()->%s()->%s();" +
                         "});" +
                         "}",
                 dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
+                getApplicationLayer(),
                 createConstantName(dependencyClass),
+                getApplicationLayer(),
                 StringUtils.lcFirst(dependencyClass.getBaseName()),
                 StringUtils.lcFirst(dependencyClass.getCanonicalClassType())
         );
@@ -399,8 +419,14 @@ public class SprykerPhpClass {
         if (!methodAlreadyExists(methodElement)) {
             addMethodWithDocBlock(
                     createGetCallToProviderMethodString(providerMethod, dependencyClass),
-                    "/**\n * @param Container $container\n\n * @return Container\n */\nfunction a() {}"
+                    String.format(
+                            "/**\n * @param \\Spryker\\%s\\Kernel\\Container $container\n\n * @return \\Spryker\\%s\\Kernel\\Container\n */\nfunction a() {}",
+                            getApplicationLayer(),
+                            getApplicationLayer()
+                    )
             );
+
+            addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
 
             return;
         }
@@ -424,14 +450,41 @@ public class SprykerPhpClass {
     }
 
     private @NotNull String createGetCallToProviderMethodString(@NotNull String methodName, @NotNull SprykerPhpClass dependencyClass) {
-        return String.format("public function %s(Container $container): Container {" +
+        addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
+
+        return String.format("public function %s(\\Spryker\\%s\\Kernel\\Container $container): \\Spryker\\%s\\Kernel\\Container {" +
                         "   $container = parent::%s($container);" +
                         "   $this->add%s($container);" +
                         "   return $container;" +
                         "}",
                 methodName,
+                getApplicationLayer(),
+                getApplicationLayer(),
                 methodName,
                 dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType()
         );
+    }
+
+    private void addImport(@NotNull String importToAdd) {
+        importList.add(importToAdd);
+    }
+
+    public void processImports() {
+        ReferenceFinder finder = new ReferenceFinder();
+        Map<String, PsiElement> result = finder.findPossibleImportReferencesByNames(this.classElement, this.importList);
+
+        NamespaceFinder nsFinder = new NamespaceFinder();
+        PhpNamespace ns = nsFinder.findNamespace(this.classElement.getContainingFile());
+
+        Set<String> imports = new HashSet<>();
+        result.forEach((String fqn, PsiElement element) -> {
+            if (PhpCodeEditUtil.importIfNeeded((PhpReference) element, fqn, ns)) {
+                imports.add(fqn);
+            }
+        });
+
+        finder.replaceReferencesWithShortNames(this.classElement, imports);
+
+        CodeStyleManager.getInstance(this.project).reformat(this.classElement);
     }
 }
