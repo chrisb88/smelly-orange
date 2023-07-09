@@ -3,6 +3,7 @@ package com.brewlab.smellyorange;
 import com.brewlab.smellyorange.Psi.*;
 import com.brewlab.smellyorange.Utils.StringUtils;
 import com.brewlab.smellyorange.settings.AppSettingsState;
+import com.brewlab.smellyorange.settings.DependencyProviderSetOrArrayNotationValue;
 import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
@@ -343,8 +344,9 @@ public class SprykerPhpClass {
         addMethodWithDocBlock(
                 createAddDependencyMethodString(dependencyClass),
                 String.format(
-                        "/**\n * @param \\Spryker\\%s\\Kernel\\Container $container\n\n * @return void\n */\nfunction a() {}",
-                        getApplicationLayer()
+                        "/**\n * @param \\Spryker\\%s\\Kernel\\Container $container\n\n * @return %s\n */\nfunction a() {}",
+                        getApplicationLayer(),
+                        AppSettingsState.getInstance().dependencyProviderReturnContainer ? "\\Spryker\\" + getApplicationLayer() + "\\Kernel\\Container" : "void"
                 )
         );
 
@@ -379,19 +381,34 @@ public class SprykerPhpClass {
     private String createAddDependencyMethodString(@NotNull SprykerPhpClass dependencyClass) {
         addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
 
-        return String.format("private function add%s(\\Spryker\\%s\\Kernel\\Container $container): void {" +
-                        "$container->set(%s::%s, %sfunction (\\Spryker\\%s\\Kernel\\Container $container) {" +
-                        "return $container->getLocator()->%s()->%s();" +
-                        "});" +
-                        "}",
-                dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
-                getApplicationLayer(),
+        final String constantStatement = String.format("%s::%s",
                 AppSettingsState.getInstance().dependencyProviderConstantBinding.name().toLowerCase(),
-                createConstantName(dependencyClass),
+                createConstantName(dependencyClass)
+        );
+
+        final String functionStatement = String.format("%sfunction (\\Spryker\\%s\\Kernel\\Container $container) {" +
+                "return $container->getLocator()->%s()->%s();" +
+                "}",
                 AppSettingsState.getInstance().dependencyProviderStaticFunction ? "static " : "",
                 getApplicationLayer(),
                 StringUtils.lcFirst(dependencyClass.getBaseName()),
                 StringUtils.lcFirst(dependencyClass.getCanonicalClassType())
+        );
+
+        String setter = String.format("$container->set(%s, %s);", constantStatement, functionStatement);
+        if (AppSettingsState.getInstance().dependencyProviderSetOrArrayNotation.equals(DependencyProviderSetOrArrayNotationValue.ARRAY)) {
+            setter = String.format("$container[%s] = %s;", constantStatement, functionStatement);
+        }
+
+        return String.format("private function add%s(\\Spryker\\%s\\Kernel\\Container $container): %s {" +
+                "%s" +
+                "%s" +
+                "}",
+                dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
+                getApplicationLayer(),
+                AppSettingsState.getInstance().dependencyProviderReturnContainer ? "\\Spryker\\" + getApplicationLayer() + "\\Kernel\\Container" : "void",
+                setter,
+                AppSettingsState.getInstance().dependencyProviderReturnContainer ? "return $container;" : ""
         );
     }
 
@@ -426,7 +443,12 @@ public class SprykerPhpClass {
             return;
         }
 
-        String statementString = String.format("$this->add%s($container);", dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType());
+        String statementString = String.format(
+                "%s$this->add%s($container);",
+                AppSettingsState.getInstance().dependencyProviderReturnContainer ? "$container = " : "",
+                dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType()
+        );
+
         Statement statement = (Statement) PhpPsiElementFactory.createFromText(this.project, Statement.class, statementString);
         assert statement != null;
         methodFound.addAfter(statement, statements.get(statements.size() - 1));
@@ -439,13 +461,14 @@ public class SprykerPhpClass {
 
         return String.format("public function %s(\\Spryker\\%s\\Kernel\\Container $container): \\Spryker\\%s\\Kernel\\Container {" +
                         "   $container = parent::%s($container);" +
-                        "   $this->add%s($container);" +
+                        "   %s$this->add%s($container);" +
                         "   return $container;" +
                         "}",
                 methodName,
                 getApplicationLayer(),
                 getApplicationLayer(),
                 methodName,
+                AppSettingsState.getInstance().dependencyProviderReturnContainer ? "$container = " : "",
                 dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType()
         );
     }
