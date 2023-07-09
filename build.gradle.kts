@@ -14,10 +14,10 @@ repositories {
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
-    version.set("2023.1.3")
     type.set("IU") // Target IDE Platform
+    version.set("2023.1.3")
 
-    plugins.set(listOf("java", "com.jetbrains.php:231.8109.199"))
+    plugins.set(listOf("com.jetbrains.php:231.9161.38"))
 }
 
 tasks {

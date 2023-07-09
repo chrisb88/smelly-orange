@@ -162,6 +162,10 @@ public class SprykerDependencyCreator {
     }
 
     public void processImports() {
+        if (AppSettingsState.getInstance().useFQNs) {
+            return;
+        }
+
         this.factoryClass.processImports();
         this.dependencyProviderClass.processImports();
     }

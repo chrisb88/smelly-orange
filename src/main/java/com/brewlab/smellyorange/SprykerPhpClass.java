@@ -3,6 +3,7 @@ package com.brewlab.smellyorange;
 import com.brewlab.smellyorange.Psi.*;
 import com.brewlab.smellyorange.Utils.StringUtils;
 import com.brewlab.smellyorange.settings.AppSettingsState;
+import com.intellij.openapi.editor.Document;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
@@ -51,6 +52,7 @@ public class SprykerPhpClass {
     protected @NotNull String baseName = "";
     protected @NotNull String classType = "unknown";
     protected @NotNull PhpClass classElement;
+    protected @Nullable PsiFile psiFile;
 
     private @NotNull String sprykerPyz;
     private @NotNull String applicationLayer;
@@ -69,6 +71,7 @@ public class SprykerPhpClass {
 
     public SprykerPhpClass (@NotNull final PsiFile psiFile, @NotNull final Project project) {
         this.project = project;
+        this.psiFile = psiFile;
         PsiDocumentManager.getInstance(this.project).commitAllDocuments();
 
         this.classElement = findPhpClass(psiFile);
@@ -115,6 +118,18 @@ public class SprykerPhpClass {
                 return;
             }
         }
+    }
+
+    private void unblockAndReformat() {
+        if (this.psiFile != null) {
+            PsiDocumentManager psiDocumentManager = PsiDocumentManager.getInstance(this.project);
+            Document document = psiDocumentManager.getDocument(this.psiFile);
+            if (document != null) {
+                psiDocumentManager.doPostponedOperationsAndUnblockDocument(document);
+            }
+        }
+
+        CodeStyleManager.getInstance(this.project).reformat(this.classElement);
     }
 
     public @NotNull String getPath() {
@@ -233,28 +248,6 @@ public class SprykerPhpClass {
     }
 
     /**
-     * Adds a use element with the given FQN to the file of this class.
-     * Does nothing if the use statement already exists.
-     *
-     * @param fqn The FQN to add
-     */
-    public void addUseElement(@NotNull String fqn) {
-        PhpUseList useElement = PhpPsiElementFactory.createUseStatement(project, fqn, null);
-
-        if (useElementAlreadyExists(useElement)) {
-            return;
-        }
-
-        UseFinder finder = new UseFinder();
-        PhpUseList lastUseStatement = finder.findLastOwnUseStatement(this.classElement.getContainingFile());
-        if (lastUseStatement != null) {
-            this.classElement.getParent().addAfter(useElement, lastUseStatement);
-        } else {
-            this.classElement.getParent().addBefore(useElement, this.classElement);
-        }
-    }
-
-    /**
      * Adds the 'get dependency' method to this class.
      * Adds also a doc block to the method.
      *
@@ -265,18 +258,6 @@ public class SprykerPhpClass {
                 createGetDependencyMethodString(dependencyClass),
                 "/**\n * @return " + dependencyClass.getFQN() + "\n */\nfunction a() {}"
         );
-    }
-
-    /**
-     * Checks if the given use statement already exists in this class.
-     *
-     * @param useElement Use element to check
-     */
-    private boolean useElementAlreadyExists(@NotNull PhpUseList useElement) {
-        UseFinder finder = new UseFinder();
-        PhpUseList useElementFound = finder.findOwnUseStatement(this.classElement.getContainingFile(), useElement);
-
-        return useElementFound != null;
     }
 
     /**
@@ -386,7 +367,7 @@ public class SprykerPhpClass {
         PhpDocComment phpDoc = (PhpDocComment) PhpPsiElementFactory.createPhpPsiFromText(project, PhpDocComment.class, docBlockString);
         PhpCodeEditUtil.insertClassMemberWithPhpDoc(this.classElement, methodElement, phpDoc);
 
-        CodeStyleManager.getInstance(this.project).reformat(this.classElement);
+        unblockAndReformat();
     }
 
     /**
@@ -431,6 +412,8 @@ public class SprykerPhpClass {
             return;
         }
 
+        unblockAndReformat();
+
         MethodFinder methodFinder = new MethodFinder();
         Method methodFound = methodFinder.findImplementedOwnMethodByName(this.classElement.getContainingFile(), methodElement.getName());
         assert methodFound != null;
@@ -446,7 +429,7 @@ public class SprykerPhpClass {
         assert statement != null;
         methodFound.addAfter(statement, statements.get(statements.size() - 1));
 
-        CodeStyleManager.getInstance(this.project).reformat(methodFound);
+        unblockAndReformat();
     }
 
     private @NotNull String createGetCallToProviderMethodString(@NotNull String methodName, @NotNull SprykerPhpClass dependencyClass) {
@@ -485,6 +468,6 @@ public class SprykerPhpClass {
 
         finder.replaceReferencesWithShortNames(this.classElement, imports);
 
-        CodeStyleManager.getInstance(this.project).reformat(this.classElement);
+        unblockAndReformat();
     }
 }

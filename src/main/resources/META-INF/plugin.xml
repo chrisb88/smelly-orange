@@ -14,7 +14,7 @@
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
     <description><![CDATA[
-    Helper for Spryker
+    A helper for the Spryker eCommerce Framework, which helps with creating the boilerplate code when adding a dependency.
   ]]></description>
 
     <!-- Product and plugin compatibility requirements.
