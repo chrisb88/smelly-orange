@@ -380,13 +380,15 @@ public class SprykerPhpClass {
         addImport(String.format("\\Spryker\\%s\\Kernel\\Container", getApplicationLayer()));
 
         return String.format("private function add%s(\\Spryker\\%s\\Kernel\\Container $container): void {" +
-                        "$container->set(self::%s, static function (\\Spryker\\%s\\Kernel\\Container $container) {" +
+                        "$container->set(%s::%s, %sfunction (\\Spryker\\%s\\Kernel\\Container $container) {" +
                         "return $container->getLocator()->%s()->%s();" +
                         "});" +
                         "}",
                 dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
                 getApplicationLayer(),
+                AppSettingsState.getInstance().dependencyProviderConstantBinding.name().toLowerCase(),
                 createConstantName(dependencyClass),
+                AppSettingsState.getInstance().dependencyProviderStaticFunction ? "static " : "",
                 getApplicationLayer(),
                 StringUtils.lcFirst(dependencyClass.getBaseName()),
                 StringUtils.lcFirst(dependencyClass.getCanonicalClassType())
