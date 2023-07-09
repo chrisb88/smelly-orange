@@ -20,6 +20,7 @@ public class AppSettingsComponent {
     private final JBCheckBox dependencyProviderReturnContainer = new JBCheckBox("Return container", false);
     private final ComboBox<String> dependencyProviderSetOrArrayNotationList = new ComboBox<>(AppSettingsConfigurable.getDependencyProviderSetOrArrayNotation());
     private final JBCheckBox useFQNs = new JBCheckBox("Use FQNs instead of imports (use statements)", false);
+    private final JBCheckBox dependencyProviderSetFunctionPrivate = new JBCheckBox("Use private instead of protected", true);
 
     public AppSettingsComponent() {
         BrowserLink settingsLink = new BrowserLink("Manage auto import settings (scroll down to PHP)", "jetbrains://idea/settings?name=Editor--General--Auto+Import");
@@ -38,6 +39,7 @@ public class AppSettingsComponent {
                 .addLabeledComponent(new JBLabel(), settingsLink, 1, false)
                 .addComponent(new TitledSeparator("Dependency Provider"))
                 .addLabeledComponent(new JBLabel("Constant binding"), dependencyProviderConstantBindingList, 1, false)
+                .addLabeledComponent(new JBLabel("Function visibility"), dependencyProviderSetFunctionPrivate, 1, false)
                 .addLabeledComponent(new JBLabel("Use static function"), dependencyProviderStaticFunction, 1, false)
                 .addLabeledComponent(new JBLabel("Return Container or void"), dependencyProviderReturnContainer, 1, false)
                 .addLabeledComponent(new JBLabel("Set dependency"), dependencyProviderSetOrArrayNotationList, 1, false)
@@ -113,5 +115,13 @@ public class AppSettingsComponent {
 
     public void setUseFQNs(boolean isSelected) {
         useFQNs.setSelected(isSelected);
+    }
+
+    public boolean getDependencyProviderSetFunctionPrivate() {
+        return dependencyProviderSetFunctionPrivate.isSelected();
+    }
+
+    public void setDependencyProviderSetFunctionPrivate(boolean isSelected) {
+        dependencyProviderSetFunctionPrivate.setSelected(isSelected);
     }
 }

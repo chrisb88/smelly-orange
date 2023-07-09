@@ -400,10 +400,11 @@ public class SprykerPhpClass {
             setter = String.format("$container[%s] = %s;", constantStatement, functionStatement);
         }
 
-        return String.format("private function add%s(\\Spryker\\%s\\Kernel\\Container $container): %s {" +
+        return String.format("%s function add%s(\\Spryker\\%s\\Kernel\\Container $container): %s {" +
                 "%s" +
                 "%s" +
                 "}",
+                AppSettingsState.getInstance().dependencyProviderSetFunctionPrivate ? "private " : "protected ",
                 dependencyClass.getBaseName() + dependencyClass.getCanonicalClassType(),
                 getApplicationLayer(),
                 AppSettingsState.getInstance().dependencyProviderReturnContainer ? "\\Spryker\\" + getApplicationLayer() + "\\Kernel\\Container" : "void",

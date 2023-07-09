@@ -39,6 +39,7 @@ public class AppSettingsConfigurable implements Configurable {
         modified |= mySettingsComponent.getDependencyProviderReturnContainer() != settings.dependencyProviderReturnContainer;
         modified |= !mySettingsComponent.getDependencyProviderSetOrArrayNotation().equals(settings.dependencyProviderSetOrArrayNotation);
         modified |= mySettingsComponent.getUseFQNs() != settings.useFQNs;
+        modified |= mySettingsComponent.getDependencyProviderSetFunctionPrivate() != settings.dependencyProviderSetFunctionPrivate;
 
         return modified;
     }
@@ -53,6 +54,7 @@ public class AppSettingsConfigurable implements Configurable {
         settings.dependencyProviderReturnContainer = mySettingsComponent.getDependencyProviderReturnContainer();
         settings.dependencyProviderSetOrArrayNotation = mySettingsComponent.getDependencyProviderSetOrArrayNotation();
         settings.useFQNs = mySettingsComponent.getUseFQNs();
+        settings.dependencyProviderSetFunctionPrivate = mySettingsComponent.getDependencyProviderSetFunctionPrivate();
     }
 
     @Override
@@ -65,6 +67,7 @@ public class AppSettingsConfigurable implements Configurable {
         mySettingsComponent.setDependencyProviderReturnContainer(settings.dependencyProviderReturnContainer);
         mySettingsComponent.setDependencyProviderSetOrArrayNotation(settings.dependencyProviderSetOrArrayNotation);
         mySettingsComponent.setUseFQNs(settings.useFQNs);
+        mySettingsComponent.setDependencyProviderSetFunctionPrivate(settings.dependencyProviderSetFunctionPrivate);
     }
 
     @Override

@@ -18,6 +18,7 @@ public class AppSettingsState implements PersistentStateComponent<AppSettingsSta
     public DependencyProviderConstantBindingValue dependencyProviderConstantBinding = DependencyProviderConstantBindingValue.SELF;
     public boolean dependencyProviderStaticFunction = true;
     public boolean dependencyProviderReturnContainer = false;
+    public boolean dependencyProviderSetFunctionPrivate = true;
     public DependencyProviderSetOrArrayNotationValue dependencyProviderSetOrArrayNotation = DependencyProviderSetOrArrayNotationValue.FUNCTION;
     public boolean useFQNs = false;
 
